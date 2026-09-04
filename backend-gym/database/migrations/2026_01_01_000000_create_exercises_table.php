@@ -10,10 +10,10 @@ return new class extends Migration
     {
         Schema::create('exercises', function (Blueprint $table) {
             $table->id();
-            $table->string('name');
-            $table->string('target_muscle');
-            $table->string('equipment')->nullable();
-            $table->text('description')->nullable();
+            $table->string('name'); // Contoh: "Barbell Bench Press"
+            $table->string('muscle_group'); // Contoh: "Chest", "Back", "Legs", "Shoulders", "Arms", "Core"
+            $table->string('equipment')->default('Barbell'); // "Barbell", "Dumbbell", "Machine", "Cable", "Bodyweight"
+            $table->text('instructions')->nullable(); // Petunjuk gerakan
             $table->timestamps();
         });
     }
