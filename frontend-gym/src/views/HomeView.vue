@@ -1,5 +1,33 @@
 <script setup>
-import { RouterLink } from 'vue-router'
+import { ref, onMounted } from 'vue'
+import { useRouter, RouterLink } from 'vue-router'
+import api from '@/utils/api'
+
+const router = useRouter()
+const currentUser = ref(null)
+
+onMounted(() => {
+  try {
+    const storedUser = localStorage.getItem('user')
+    if (storedUser) {
+      currentUser.value = JSON.parse(storedUser)
+    }
+  } catch (e) {
+    console.error('Gagal membaca data user dari storage:', e)
+  }
+})
+
+const handleLogout = async () => {
+  try {
+    await api.post('/logout')
+  } catch (e) {
+    // Abaikan jika token di backend sudah expired
+  } finally {
+    localStorage.removeItem('token')
+    localStorage.removeItem('user')
+    router.push('/login')
+  }
+}
 
 const features = [
   { tag: 'LOGBOOK', title: 'Catat Set & Reps', desc: 'Input beban (kg), repetisi, dan RPE seketika saat jeda latihan.', stat: '⚡ Quick Log' },
@@ -15,7 +43,11 @@ const features = [
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" class="ic"><path d="m6.5 6.5 11 11"/><path d="m21 21-1-1"/><path d="m3 3 1 1"/><path d="m18 22 4-4"/><path d="m2 6 4-4"/><path d="m3 10 7-7"/><path d="m14 21 7-7"/></svg>
         <span>APEX<b>STRENGTH</b></span>
       </div>
-      <RouterLink to="/login" class="btn-nav">Keluar / Logout ⎋</RouterLink>
+      <div class="nav-actions">
+        <RouterLink to="/admin" class="btn-admin-link">Console Admin ⚙</RouterLink>
+        <span v-if="currentUser?.name" class="user-tag">Lifter: <b>{{ currentUser.name }}</b></span>
+        <button @click="handleLogout" class="btn-nav">Keluar / Logout ⎋</button>
+      </div>
     </nav>
 
     <header class="hero" v-motion :initial="{ opacity: 0, y: 15 }" :enter="{ opacity: 1, y: 0 }">
@@ -74,8 +106,13 @@ const features = [
 .brand { display: flex; align-items: center; gap: 0.6rem; font-family: 'Syne', sans-serif; font-size: 1.25rem; font-weight: 800; color: #fff; }
 .brand b, .card small, .pr-badge, .ok { color: #ccff00; }
 .ic { width: 24px; height: 24px; color: #ccff00; }
-.btn-nav { background: #121722; border: 1px solid rgba(204,255,0,0.3); color: #ccff00; padding: 0.45rem 1rem; border-radius: 999px; font-size: 0.82rem; font-weight: 700; transition: .2s; }
+.btn-nav { background: #121722; border: 1px solid rgba(204,255,0,0.3); color: #ccff00; padding: 0.45rem 1rem; border-radius: 999px; font-size: 0.82rem; font-weight: 700; transition: .2s; cursor: pointer; }
 .btn-nav:hover, .btn-main:hover { background: #d9ff33; color: #07090e; }
+.btn-admin-link { background: rgba(56,189,248,0.12); border: 1px solid rgba(56,189,248,0.3); color: #38bdf8; padding: 0.42rem 0.85rem; border-radius: 999px; font-size: 0.78rem; font-weight: 700; transition: .2s; text-decoration: none; }
+.btn-admin-link:hover { background: rgba(56,189,248,0.22); color: #7dd3fc; }
+.nav-actions { display: flex; align-items: center; gap: 0.9rem; }
+.user-tag { font-size: 0.82rem; color: #94a3b8; background: rgba(255,255,255,0.06); padding: 0.35rem 0.8rem; border-radius: 999px; border: 1px solid rgba(255,255,255,0.1); }
+.user-tag b { color: #ccff00; }
 
 .hero { padding: 4rem 1.5rem 2.8rem; text-align: center; max-width: 820px; margin: 0 auto; }
 .hero-title {
