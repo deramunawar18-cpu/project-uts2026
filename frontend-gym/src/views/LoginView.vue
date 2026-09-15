@@ -78,13 +78,20 @@ const handleLogin = async () => {
     // Berhasil login, arahkan ke Home / Workout Tracker
     router.push('/home')
   } catch (error) {
-    console.error('Login Error:', error)
+    console.error('Login Error details:', {
+      message: error.message,
+      code: error.code,
+      status: error.response?.status,
+      data: error.response?.data,
+    })
     if (error.response?.data?.message) {
       errorMessage.value = error.response.data.message
     } else if (error.response?.status === 401) {
       errorMessage.value = 'Email atau kata sandi tidak cocok.'
+    } else if (error.code === 'ECONNABORTED') {
+      errorMessage.value = 'Koneksi ke backend timeout. Periksa apakah server backend aktif.'
     } else {
-      errorMessage.value = 'Gagal terhubung ke backend. Pastikan server Laravel aktif.'
+      errorMessage.value = error.message || 'Gagal terhubung ke backend.'
     }
   } finally {
     isLoading.value = false
