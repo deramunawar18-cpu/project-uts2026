@@ -45,12 +45,25 @@ const fetchStats = async () => {
   }
 }
 
-// 2. Fetch Exercises
+// 2. Fetch Exercises (dengan mapping target_muscle & description dari backend)
 const fetchExercises = async () => {
   loadingExercises.value = true
   try {
-    const res = await api.get('/admin/exercises')
-    exercises.value = res.data?.data || (Array.isArray(res.data) ? res.data : [])
+    let res
+    try {
+      res = await api.get('/admin/exercises')
+    } catch (e) {
+      // Fallback ke /exercises jika backend mendaftarkannya di rute publik
+      res = await api.get('/exercises')
+    }
+    const rawList = res.data?.data || (Array.isArray(res.data) ? res.data : [])
+    exercises.value = rawList.map(item => ({
+      id: item.id,
+      name: item.name,
+      muscle_group: item.target_muscle || item.muscle_group || 'General',
+      equipment: item.equipment || 'Barbell',
+      instructions: item.description || item.instructions || ''
+    }))
   } catch (err) {
     console.error('Exercises error:', err)
     notify('Gagal memuat data dari backend.', 'error')
@@ -63,7 +76,7 @@ const fetchExercises = async () => {
 const filteredList = computed(() => {
   return exercises.value.filter(item => {
     const matchName = item.name.toLowerCase().includes(searchQuery.value.toLowerCase())
-    const matchMuscle = selectedMuscle.value === 'ALL' || item.muscle_group.toLowerCase() === selectedMuscle.value.toLowerCase()
+    const matchMuscle = selectedMuscle.value === 'ALL' || (item.muscle_group && item.muscle_group.toLowerCase() === selectedMuscle.value.toLowerCase())
     return matchName && matchMuscle
   })
 })
@@ -83,7 +96,7 @@ const openModal = (item = null) => {
 
 const closeModal = () => { isModalOpen.value = false }
 
-// Submit Form (Tambah / Update)
+// Submit Form (Tambah / Update - mengirim field target_muscle & description sesuai backend)
 const saveExercise = async () => {
   if (!form.value.name.trim()) {
     modalError.value = 'Nama latihan wajib diisi.'
@@ -94,8 +107,10 @@ const saveExercise = async () => {
   try {
     const payload = {
       name: form.value.name.trim(),
+      target_muscle: form.value.muscle_group, // Sesuai kolom database backend teman
       muscle_group: form.value.muscle_group,
       equipment: form.value.equipment,
+      description: form.value.instructions?.trim() || null, // Sesuai kolom database backend teman
       instructions: form.value.instructions?.trim() || null
     }
 
@@ -110,7 +125,12 @@ const saveExercise = async () => {
     fetchExercises()
     fetchStats()
   } catch (err) {
-    modalError.value = err.response?.data?.message || 'Gagal menyimpan data.'
+    if (err.response?.data?.errors) {
+      const firstKey = Object.keys(err.response.data.errors)[0]
+      modalError.value = err.response.data.errors[firstKey][0]
+    } else {
+      modalError.value = err.response?.data?.message || 'Gagal menyimpan data ke backend.'
+    }
   } finally {
     modalLoading.value = false
   }

@@ -6,8 +6,8 @@ import axios from 'axios'
  * atau default ke http://127.0.0.1:8000/api (standar Laravel / local server).
  */
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://10.10.9.109:8000/api',
-  timeout: 10000,
+  baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
+  timeout: 15000,
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
