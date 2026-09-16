@@ -107,11 +107,11 @@ const saveExercise = async () => {
   try {
     const payload = {
       name: form.value.name.trim(),
-      target_muscle: form.value.muscle_group, // Sesuai kolom database backend teman
       muscle_group: form.value.muscle_group,
+      target_muscle: form.value.muscle_group,
       equipment: form.value.equipment,
-      description: form.value.instructions?.trim() || null, // Sesuai kolom database backend teman
-      instructions: form.value.instructions?.trim() || null
+      instructions: form.value.instructions?.trim() || null,
+      description: form.value.instructions?.trim() || null
     }
 
     if (isEditing.value) {
@@ -140,12 +140,24 @@ const saveExercise = async () => {
 const removeExercise = async (id, name) => {
   if (!confirm(`Hapus latihan "${name}"?`)) return
   try {
-    await api.delete(`/admin/exercises/${id}`)
-    notify('Latihan berhasil dihapus.')
+    let res
+    try {
+      res = await api.delete(`/admin/exercises/${id}`)
+    } catch (adminErr) {
+      // Jika route /admin/exercises/${id} 404, coba fallback ke /exercises/${id}
+      if (adminErr.response?.status === 404) {
+        res = await api.delete(`/exercises/${id}`)
+      } else {
+        throw adminErr
+      }
+    }
+    notify(res?.data?.message || 'Latihan berhasil dihapus.')
     fetchExercises()
     fetchStats()
   } catch (err) {
-    notify('Gagal menghapus latihan.', 'error')
+    console.error('Delete error details:', err.response?.data || err)
+    const msg = err.response?.data?.message || 'Gagal menghapus latihan.'
+    notify(msg, 'error')
   }
 }
 
@@ -158,6 +170,29 @@ const logout = async () => {
 }
 
 onMounted(() => {
+  const token = localStorage.getItem('token')
+  let user = null
+  try {
+    const raw = localStorage.getItem('user')
+    user = raw ? JSON.parse(raw) : null
+  } catch (e) {
+    user = null
+  }
+
+  const isAdmin = user && (
+    (user.role && user.role.toLowerCase() === 'admin') ||
+    user.is_admin === 1 ||
+    user.is_admin === true ||
+    user.is_admin === '1' ||
+    (user.email && (user.email.toLowerCase().includes('admin') || user.email.toLowerCase() === 'admin@apex.com'))
+  )
+
+  if (!token || !isAdmin) {
+    alert('Akses Ditolak: Halaman Console Admin hanya untuk akun Admin.')
+    router.push('/home')
+    return
+  }
+
   fetchStats()
   fetchExercises()
 })
