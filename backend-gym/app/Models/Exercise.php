@@ -9,10 +9,13 @@ class Exercise extends Model
 {
     use HasFactory;
 
+    protected $table = 'exercises';
+
+    // Kolom-kolom yang ada di database MySQL:
     protected $fillable = [
         'name',
-        'muscle_group',
+        'target_muscle',
         'equipment',
-        'instructions',
+        'description',
     ];
 }
