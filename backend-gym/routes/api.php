@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\ExerciseController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\Admin\AdminExerciseController;
 use App\Http\Controllers\Api\Admin\AdminDashboardController;
+use App\Http\Controllers\Api\WorkoutLogController;
 
 // 1. Tes Koneksi
 Route::get('/ping', function () {
@@ -27,6 +28,11 @@ Route::apiResource('exercises', ExerciseController::class)->only(['index', 'show
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/profile', [AuthController::class, 'profile']);
     Route::post('/logout', [AuthController::class, 'logout']);
+    Route::get('/workout-logs', [WorkoutLogController::class, 'index']);
+    Route::post('/workout-logs', [WorkoutLogController::class, 'store']);
+    Route::delete('/workout-logs/{id}', [WorkoutLogController::class, 'destroy']);
+
+
 
     // Khusus Admin
     Route::prefix('admin')->group(function () {
