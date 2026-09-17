@@ -5,7 +5,7 @@ import vue from '@vitejs/plugin-vue'
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
-  const backendTarget = env.VITE_BACKEND_TARGET || 'http://192.168.17.181:8000'
+  const backendTarget = env.VITE_BACKEND_TARGET || 'http://192.168.54.181:8000'
 
   return {
     plugins: [
