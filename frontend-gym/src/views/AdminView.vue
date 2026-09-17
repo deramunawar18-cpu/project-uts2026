@@ -32,12 +32,75 @@ const notify = (msg, type = 'success') => {
   setTimeout(() => { toast.value.show = false }, 3000)
 }
 
-// 1. Fetch Dashboard Stats
+// 1. Fetch Dashboard Stats (Mendukung snake_case, camelCase, dan Fallback Otomatis)
 const fetchStats = async () => {
   loadingStats.value = true
   try {
-    const res = await api.get('/admin/dashboard')
-    stats.value = res.data?.data || res.data || stats.value
+    let raw = {}
+    try {
+      const res = await api.get('/admin/dashboard')
+      raw = res.data?.data || res.data || {}
+    } catch (e1) {
+      try {
+        const res = await api.get('/dashboard')
+        raw = res.data?.data || res.data || {}
+      } catch (e2) {
+        try {
+          const res = await api.get('/admin/stats')
+          raw = res.data?.data || res.data || {}
+        } catch (e3) {
+          raw = {}
+        }
+      }
+    }
+
+    // Normalisasi properti dari backend (snake_case vs camelCase)
+    let uCount = raw.totalUsers ?? raw.total_users ?? raw.users_count ?? raw.total_members ?? raw.members_count ?? raw.totalLifters ?? raw.total_lifters
+    let wCount = raw.totalWorkouts ?? raw.total_workouts ?? raw.workouts_count ?? raw.total_logs ?? raw.logs_count
+    let vKg = raw.totalVolumeKg ?? raw.total_volume_kg ?? raw.total_volume ?? raw.volume_kg
+    let pop = raw.popularExercises || raw.popular_exercises || []
+
+    // FALLBACK 1: Jika user count masih 0 / null, ambil langsung daftar user dari backend
+    if (!uCount || uCount === 0) {
+      try {
+        let uRes
+        try {
+          uRes = await api.get('/admin/users')
+        } catch (errU1) {
+          uRes = await api.get('/users')
+        }
+        const uList = uRes.data?.data || (Array.isArray(uRes.data) ? uRes.data : [])
+        if (Array.isArray(uList) && uList.length > 0) {
+          uCount = uList.length
+        }
+      } catch (errU2) {}
+    }
+
+    // FALLBACK 2: Jika workout logs masih 0 / null, ambil dari /workout-logs
+    if (!wCount || wCount === 0) {
+      try {
+        let wRes
+        try {
+          wRes = await api.get('/workout-logs')
+        } catch (errW1) {
+          wRes = await api.get('/admin/workout-logs')
+        }
+        const wList = wRes.data?.data || (Array.isArray(wRes.data) ? wRes.data : [])
+        if (Array.isArray(wList) && wList.length > 0) {
+          wCount = wList.length
+          if (!vKg || vKg === 0) {
+            vKg = wList.reduce((acc, cur) => acc + ((parseFloat(cur.weight) || 0) * (parseInt(cur.reps) || 0)), 0)
+          }
+        }
+      } catch (errW2) {}
+    }
+
+    stats.value = {
+      totalUsers: uCount || 0,
+      totalWorkouts: wCount || 0,
+      totalVolumeKg: vKg || 0,
+      popularExercises: Array.isArray(pop) ? pop : []
+    }
   } catch (err) {
     console.error('Stats error:', err)
   } finally {
@@ -243,7 +306,7 @@ onMounted(() => {
           <div class="card stat-card">
             <span class="stat-label">Total Lifters</span>
             <div class="stat-num">{{ loadingStats ? '...' : stats.totalUsers }}</div>
-            <span class="stat-desc">User terdaftar di database</span>
+            <span class="stat-desc">User yang terdaftar</span>
           </div>
           <div class="card stat-card">
             <span class="stat-label">Total Sesi Latihan</span>

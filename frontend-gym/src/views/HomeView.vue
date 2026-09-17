@@ -3,7 +3,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, RouterLink } from 'vue-router'
 import api from '@/utils/api'
 
-// Asset Gambar Latihan yang Tepat
+// Asset Gambar Latihan
 import imgPushUp from '@/assets/Liegestütze gehen immer!.jpg'
 import imgDumbbellBench from '@/assets/How to Dumbbell Bench Press_ Form, Benefits, and Variations.jpg'
 import imgBarbellBench from '@/assets/download (5).jpg'
@@ -48,50 +48,36 @@ const handleLogout = async () => {
   router.push('/login')
 }
 
-// 2. Mapping Gambar yang Benar & Akurat
+// 2. Mapping Gambar Visual Latihan
 const getExerciseImage = (item) => {
   if (!item) return imgBarbellBench
   const name = (item.name || '').toLowerCase()
   const muscle = (item.muscle || item.target_muscle || '').toLowerCase()
   const equip = (item.equipment || '').toLowerCase()
 
-  // 1. Lat Pulldown (Back / Cable) -> download (6).jpg
   if (name.includes('lat') || name.includes('pulldown') || name.includes('pull-down') || muscle.includes('back')) {
     return imgLatPulldown
   }
-
-  // 2. Incline Dumbbell Press / Dumbbell Bench -> How to Dumbbell Bench Press...jpg
   if (name.includes('dumbbell') || equip.includes('dumbbell')) {
     if (name.includes('curl') || muscle.includes('arm')) return imgHammerCurl
     if (name.includes('shoulder') || muscle.includes('shoulder')) return imgShoulderPress
     return imgDumbbellBench
   }
-
-  // 3. Barbell Bench Press (Chest) -> download (5).jpg
   if (name.includes('bench') || muscle.includes('chest')) {
     return imgBarbellBench
   }
-
-  // 4. Push Up (Chest / Bodyweight) -> Liegestütze gehen immer!.jpg
   if (name.includes('push') || name.includes('push-up') || name.includes('pushup')) {
     return imgPushUp
   }
-
-  // 5. Overhead Shoulder Press (Shoulders) -> Overhead Shoulder Press...jpg
   if (name.includes('shoulder') || name.includes('overhead') || muscle.includes('shoulder')) {
     return imgShoulderPress
   }
-
-  // 6. Bicep Curl / Hammer Curl (Arms) -> Do Dumbbell Hammer Curls...jpg
   if (name.includes('curl') || name.includes('bicep') || muscle.includes('arm')) {
     return imgHammerCurl
   }
-
-  // 7. Squat (Legs) -> 5 stretches to achieve a bigger squat...jpg
   if (name.includes('squat') || muscle.includes('leg')) {
     return imgSquat
   }
-
   return imgBarbellBench
 }
 
@@ -106,11 +92,22 @@ const notify = (msg, type = 'success') => {
   toastTimer = setTimeout(() => { toastMsg.value = '' }, 3000)
 }
 
-// 4. Data Master & Log Harian
+// 4. Data Master & Logbook Harian
 const exercisesList = ref([])
 const todayLogs = ref([])
 const loadingLogs = ref(false)
 const selectedDate = ref(new Date().toISOString().split('T')[0])
+
+const formattedDate = computed(() => {
+  if (!selectedDate.value) return ''
+  try {
+    const [year, month, day] = selectedDate.value.split('-')
+    const d = new Date(year, month - 1, day)
+    return d.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+  } catch (e) {
+    return selectedDate.value
+  }
+})
 
 const fetchExercises = async () => {
   try {
@@ -170,21 +167,21 @@ const removeLog = async (id) => {
   }
 }
 
-// 5. Fitur Sesi Latihan Interaktif (Pilih Gerakan -> Atur Set & Reps -> Jalankan Set per Set)
+// 5. Fitur Sesi Latihan Interaktif
 const isWorkoutModalOpen = ref(false)
-const modalStep = ref('select') // 'select' | 'target' | 'live' | 'summary'
+const modalStep = ref('select')
 const selectedExercise = ref(null)
 
-// Pengaturan Target Latihan
-const totalSetsTarget = ref(3)  // Berapa set (misal 3 set)
-const targetReps = ref(10)       // Berapa repetisi per set (misal 10 reps)
-const targetWeight = ref(60)     // Beban kg (misal 60 kg)
-const restDuration = ref(60)     // Durasi waktu istirahat antar set (detik)
+// Target Latihan
+const totalSetsTarget = ref(3)
+const targetReps = ref(10)
+const targetWeight = ref(60)
+const restDuration = ref(60)
 
-// State Saat Sesi Berjalan
-const currentSet = ref(1)        // Set ke berapa yang sedang berlangsung (1, 2, 3...)
-const isResting = ref(false)     // Apakah sedang fase istirahat
-const restCountdown = ref(60)    // Hitungan mundur istirahat
+// State Sesi Berjalan
+const currentSet = ref(1)
+const isResting = ref(false)
+const restCountdown = ref(60)
 const isSaving = ref(false)
 let restTimerInterval = null
 
@@ -201,47 +198,58 @@ const openWorkoutModal = () => {
 const chooseExercise = (ex) => {
   selectedExercise.value = ex
   modalStep.value = 'target'
+  isWorkoutModalOpen.value = true
 }
 
-// Mulai sesi latihan dari Set 1
 const startLiveWorkout = () => {
   currentSet.value = 1
   isResting.value = false
   modalStep.value = 'live'
 }
 
-// Selesaikan set saat ini (tanpa tap repetisi)
+const startRestInterval = () => {
+  if (restTimerInterval) clearInterval(restTimerInterval)
+  restTimerInterval = setInterval(() => {
+    if (restCountdown.value > 0) {
+      restCountdown.value--
+    } else {
+      clearInterval(restTimerInterval)
+      notify(`Waktu istirahat selesai! Bersiap untuk Set ${currentSet.value + 1} 🔥`, 'success')
+    }
+  }, 1000)
+}
+
+const adjustRestTime = (delta) => {
+  const newVal = Math.max(5, restCountdown.value + delta)
+  restCountdown.value = newVal
+  restDuration.value = newVal
+  startRestInterval()
+}
+
+const setRestTime = (sec) => {
+  restCountdown.value = sec
+  restDuration.value = sec
+  startRestInterval()
+}
+
 const completeCurrentSet = () => {
   if (currentSet.value < totalSetsTarget.value) {
-    // Masuk fase istirahat sebelum lanjut ke set berikutnya
     isResting.value = true
-    restCountdown.value = restDuration.value
-
-    if (restTimerInterval) clearInterval(restTimerInterval)
-    restTimerInterval = setInterval(() => {
-      if (restCountdown.value > 0) {
-        restCountdown.value--
-      } else {
-        // Waktu istirahat habis, lanjut ke set berikutnya
-        nextSet()
-      }
-    }, 1000)
+    restCountdown.value = restDuration.value || 60
+    startRestInterval()
   } else {
-    // Semua set telah selesai diselesaikan!
     if (restTimerInterval) clearInterval(restTimerInterval)
     isResting.value = false
     modalStep.value = 'summary'
   }
 }
 
-// Lanjut ke set berikutnya
 const nextSet = () => {
   if (restTimerInterval) clearInterval(restTimerInterval)
   isResting.value = false
   currentSet.value++
 }
 
-// Simpan seluruh set latihan ke backend
 const saveWorkoutResult = async () => {
   if (!selectedExercise.value) return
   isSaving.value = true
@@ -258,10 +266,8 @@ const saveWorkoutResult = async () => {
     }
 
     try {
-      // Coba kirim batch seluruh set
       await api.post('/workout-logs', payload)
     } catch (e) {
-      // Fallback kirim satu per satu
       for (const s of payload.sets) {
         await api.post('/workout-logs', {
           exercise_id: payload.exercise_id,
@@ -285,7 +291,6 @@ const saveWorkoutResult = async () => {
 }
 
 // 6. Rest Timer Cepat
-const isRestOpen = ref(false)
 const restSec = ref(90)
 const restActive = ref(false)
 let restTimer = null
@@ -293,7 +298,6 @@ let restTimer = null
 const startRest = (s = 90) => {
   restSec.value = s
   restActive.value = true
-  isRestOpen.value = true
   if (restTimer) clearInterval(restTimer)
   restTimer = setInterval(() => {
     if (restSec.value > 0) {
@@ -307,117 +311,201 @@ const startRest = (s = 90) => {
 }
 
 onUnmounted(() => {
-  if (timer) clearInterval(timer)
+  if (restTimerInterval) clearInterval(restTimerInterval)
   if (restTimer) clearInterval(restTimer)
   if (toastTimer) clearTimeout(toastTimer)
 })
-
-const features = [
-  { tag: 'INTERACTIVE', title: 'Live Timer & Reps', desc: 'Lakukan latihan dengan panduan gambar, countdown timer, dan tap hitungan repetisi.', stat: '⚡ Active Mode' },
-  { tag: 'ANALYTICS', title: 'Progressive Overload', desc: 'Pantau akumulasi volume angkatan harian secara instan dan akurat.', stat: '📈 Auto Volume' },
-  { tag: 'TIMER', title: 'Smart Rest Interval', desc: 'Countdown otomatis antar set agar intensitas dan detak jantung terjaga.', stat: '⏱️ Rest Timer' }
-]
 </script>
 
 <template>
-  <div class="home">
-    <!-- Toast -->
-    <div v-if="toastMsg" class="toast" :class="toastType">
+  <div class="home-layout">
+    <!-- Toast Feedback -->
+    <div v-if="toastMsg" class="toast-bubble" :class="toastType">
       {{ toastMsg }}
     </div>
 
-    <!-- Nav -->
-    <nav class="nav">
-      <div class="brand">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" class="ic"><path d="m6.5 6.5 11 11"/><path d="m21 21-1-1"/><path d="m3 3 1 1"/><path d="m18 22 4-4"/><path d="m2 6 4-4"/><path d="m3 10 7-7"/><path d="m14 21 7-7"/></svg>
-        <span>APEX<b>STRENGTH</b></span>
-      </div>
-      <div class="nav-actions">
-        <RouterLink v-if="isAdmin" to="/admin" class="btn-admin-link">Console Admin ⚙</RouterLink>
-        <span v-if="currentUser?.name" class="user-tag">Lifter: <b>{{ currentUser.name }}</b></span>
-        <button @click="handleLogout" class="btn-nav">Logout ⎋</button>
-      </div>
-    </nav>
-
-    <!-- Hero -->
-    <header class="hero">
-      <h1 class="hero-title">
-        <span>CATAT SESI LATIHAN</span>
-        <span class="neon">PANTAU REPS & WAKTU</span>
-      </h1>
-      <p class="sub">Pilih gerakan latihan bergambar, atur target repetisi dan waktu, lalu catat progres gym Anda secara akurat.</p>
-      
-      <div class="cta-wrap">
-        <button @click="openWorkoutModal" class="btn-primary">⚡ Mulai Sesi Latihan</button>
-        <button @click="startRest(90)" class="btn-secondary">⏱️ Rest Timer (90s)</button>
-      </div>
-
-      <!-- Stats Banner -->
-      <div class="stats-banner">
-        <div class="stat-item">
-          <small>VOLUME HARI INI</small>
-          <strong>{{ totalVolume.toLocaleString('id-ID') }} <span>kg</span></strong>
-        </div>
-        <div class="stat-sep"></div>
-        <div class="stat-item">
-          <small>TOTAL SET</small>
-          <strong>{{ totalSets }} <span>sets</span></strong>
-        </div>
-        <div class="stat-sep"></div>
-        <div class="stat-item">
-          <small>TANGGAL</small>
-          <input type="date" v-model="selectedDate" @change="fetchTodayLogs" class="date-input" />
-        </div>
-      </div>
-
-      <!-- Logbook Card -->
-      <div class="log-card">
-        <div class="card-head">
-          <h4>Riwayat Latihan Hari Ini</h4>
-          <button @click="openWorkoutModal" class="btn-mini">+ Tambah</button>
+    <!-- Clean Modern Navbar -->
+    <header class="app-nav">
+      <div class="nav-container">
+        <div class="brand">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" class="brand-icon">
+            <path d="m6.5 6.5 11 11"/><path d="m21 21-1-1"/><path d="m3 3 1 1"/><path d="m18 22 4-4"/><path d="m2 6 4-4"/><path d="m3 10 7-7"/><path d="m14 21 7-7"/>
+          </svg>
+          <span class="brand-title">APEX<b>STRENGTH</b></span>
         </div>
 
-        <div v-if="loadingLogs" class="state-box">Memuat catatan...</div>
-        <div v-else-if="groupedLogs.length === 0" class="state-box">
-          Belum ada catatan latihan untuk tanggal ini. Klik <b>Mulai Sesi Latihan</b> di atas.
-        </div>
-        <div v-else class="log-list">
-          <div v-for="g in groupedLogs" :key="g.id" class="log-group">
-            <div class="group-title">
-              <img :src="getExerciseImage(g)" class="group-thumb" />
-              <div>
-                <strong>{{ g.name }}</strong>
-                <span class="pill">{{ g.muscle }}</span>
-              </div>
-            </div>
-            <div class="set-list">
-              <div v-for="s in g.sets" :key="s.id" class="set-row">
-                <span class="set-num">SET {{ s.set_number }}</span>
-                <b>{{ s.weight }} kg × {{ s.reps }} reps</b>
-                <span v-if="s.duration_seconds > 0" class="set-time">⏱️ {{ s.duration_seconds }}s</span>
-                <button @click="removeLog(s.id)" class="btn-del" title="Hapus">✕</button>
-              </div>
-            </div>
+        <div class="nav-actions">
+          <RouterLink v-if="isAdmin" to="/admin" class="nav-badge-admin">
+            Console Admin ⚙
+          </RouterLink>
+          <div class="user-pill">
+            <span class="dot"></span>
+            <span>{{ currentUser?.name || 'Lifter' }}</span>
           </div>
+          <button @click="handleLogout" class="btn-logout" title="Keluar">
+            Keluar ⎋
+          </button>
         </div>
       </div>
     </header>
 
-    <!-- Fitur Utama -->
-    <section class="feats-section">
-      <div class="feats-header">
-        <small>FITUR UTAMA</small>
-        <h2>Fokus Pada Progres Fisik Anda</h2>
-      </div>
-      <div class="feats-grid">
-        <div v-for="(f, i) in features" :key="i" class="feat-card">
-          <small class="feat-tag">{{ f.tag }}</small>
-          <h3>{{ f.title }}</h3>
-          <p>{{ f.desc }}</p>
-          <span class="feat-badge">{{ f.stat }}</span>
+    <!-- Main Dashboard Body -->
+    <main class="dashboard-body">
+      <!-- Top Overview Bar -->
+      <section class="overview-header">
+        <div class="overview-info">
+          <span class="sub-date">{{ formattedDate }}</span>
+          <h2>Jurnal Latihan Harian</h2>
         </div>
+        <div class="overview-actions">
+          <button @click="openWorkoutModal" class="btn-action-primary">
+            + Sesi Latihan Baru
+          </button>
+          <button @click="startRest(90)" class="btn-action-secondary">
+            ⏱️ Rest Timer (90s)
+          </button>
+        </div>
+      </section>
+
+      <!-- Stat Metrics (3 Clean Minimalist Cards) -->
+      <section class="metrics-grid">
+        <div class="metric-card">
+          <div class="metric-head">
+            <span class="metric-label">VOLUME BEBAN HARI INI</span>
+            <span class="metric-tag">BEBAN</span>
+          </div>
+          <div class="metric-val">
+            {{ totalVolume.toLocaleString('id-ID') }} <span class="unit">kg</span>
+          </div>
+          <p class="metric-sub">Akumulasi progres beban terangkat</p>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-head">
+            <span class="metric-label">TOTAL SET DISELESAIKAN</span>
+            <span class="metric-tag">SETS</span>
+          </div>
+          <div class="metric-val">
+            {{ totalSets }} <span class="unit">sets</span>
+          </div>
+          <p class="metric-sub">{{ groupedLogs.length }} variasi latihan tercatat</p>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-head">
+            <span class="metric-label">TANGGAL LATIHAN</span>
+            <span class="metric-tag">ARSIP</span>
+          </div>
+          <div class="date-picker-wrap">
+            <input type="date" v-model="selectedDate" @change="fetchTodayLogs" class="input-date-native" />
+          </div>
+          <p class="metric-sub">Pilih tanggal untuk melihat riwayat</p>
+        </div>
+      </section>
+
+      <!-- Two Column Workspace Layout -->
+      <div class="workspace-grid">
+        <!-- Kolom Kiri: Riwayat Logbook Sesi -->
+        <section class="workspace-main">
+          <div class="section-card">
+            <div class="section-card-head">
+              <div class="head-title">
+                <h3>Riwayat Latihan</h3>
+                <span class="counter-badge">{{ groupedLogs.length }} Gerakan</span>
+              </div>
+              <button @click="openWorkoutModal" class="btn-inline-add">
+                + Tambah Set
+              </button>
+            </div>
+
+            <!-- Loading State -->
+            <div v-if="loadingLogs" class="empty-state">
+              <span>Memuat catatan latihan...</span>
+            </div>
+
+            <!-- Empty State -->
+            <div v-else-if="groupedLogs.length === 0" class="empty-state">
+              <div class="empty-icon">🏋️‍♂️</div>
+              <h4>Belum Ada Catatan Latihan</h4>
+              <p>Mulai sesi latihan hari ini dan pantau beban angkatan secara terukur.</p>
+              <button @click="openWorkoutModal" class="btn-action-primary mini">
+                Mulai Sesi Latihan
+              </button>
+            </div>
+
+            <!-- Log List -->
+            <div v-else class="exercise-logs">
+              <div v-for="g in groupedLogs" :key="g.id" class="exercise-log-item">
+                <div class="item-header">
+                  <img :src="getExerciseImage(g)" class="item-thumb" :alt="g.name" />
+                  <div class="item-meta">
+                    <h4>{{ g.name }}</h4>
+                    <span class="badge-muscle">{{ g.muscle }}</span>
+                  </div>
+                  <div class="item-summary-pill">
+                    {{ g.sets.length }} Set
+                  </div>
+                </div>
+
+                <div class="sets-table">
+                  <div v-for="s in g.sets" :key="s.id" class="set-row">
+                    <span class="set-badge">SET {{ s.set_number }}</span>
+                    <span class="set-data"><b>{{ s.weight }} kg</b> × <b>{{ s.reps }} reps</b></span>
+                    <span v-if="s.duration_seconds > 0" class="set-timer">⏱️ {{ s.duration_seconds }}s</span>
+                    <button @click="removeLog(s.id)" class="btn-remove" title="Hapus set ini">✕</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Kolom Kanan: Pilihan Cepat & Rest Timer Widget -->
+        <aside class="workspace-side">
+          <!-- Pilihan Latihan Cepat -->
+          <div class="side-card">
+            <div class="side-head">
+              <h4>Pilihan Latihan Cepat</h4>
+              <span class="sub-hint">Klik untuk mulai</span>
+            </div>
+            <div class="quick-ex-list">
+              <div 
+                v-for="ex in exercisesList.slice(0, 5)" 
+                :key="ex.id" 
+                class="quick-ex-item"
+                @click="chooseExercise(ex)"
+              >
+                <img :src="getExerciseImage(ex)" class="quick-thumb" :alt="ex.name" />
+                <div class="quick-meta">
+                  <strong>{{ ex.name }}</strong>
+                  <small>{{ ex.muscle }} • {{ ex.equipment }}</small>
+                </div>
+                <span class="quick-arrow">➔</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Rest Timer Widget -->
+          <div class="side-card rest-widget">
+            <div class="side-head">
+              <h4>Rest Timer Cepat</h4>
+              <span class="timer-tag" :class="{ running: restActive }">
+                {{ restActive ? 'BERJALAN' : 'STANDBY' }}
+              </span>
+            </div>
+            <div class="widget-display">
+              {{ restSec }}<span>s</span>
+            </div>
+            <div class="widget-presets">
+              <button @click="startRest(30)" class="btn-timer-chip">30s</button>
+              <button @click="startRest(60)" class="btn-timer-chip">60s</button>
+              <button @click="startRest(90)" class="btn-timer-chip">90s</button>
+              <button @click="startRest(120)" class="btn-timer-chip">120s</button>
+            </div>
+          </div>
+        </aside>
       </div>
-    </section>
+    </main>
 
     <!-- Modal Latihan Interaktif -->
     <div v-if="isWorkoutModalOpen" class="modal-overlay" @click.self="isWorkoutModalOpen = false">
@@ -427,7 +515,7 @@ const features = [
           <button @click="isWorkoutModalOpen = false" class="btn-close">✕</button>
         </div>
 
-        <!-- Step 1: Pilih Gambar -->
+        <!-- Step 1: Pilih Gerakan -->
         <div v-if="modalStep === 'select'" class="gallery-grid">
           <div v-for="ex in exercisesList" :key="ex.id" class="gallery-card" @click="chooseExercise(ex)">
             <img :src="getExerciseImage(ex)" class="gallery-img" />
@@ -438,7 +526,7 @@ const features = [
           </div>
         </div>
 
-        <!-- Step 2: Atur Jumlah Set, Repetisi & Istirahat -->
+        <!-- Step 2: Atur Jumlah Set, Repetisi, dan Beban -->
         <div v-else-if="modalStep === 'target'" class="target-pane">
           <div class="selected-header">
             <img :src="getExerciseImage(selectedExercise)" class="selected-thumb" />
@@ -449,7 +537,6 @@ const features = [
             <button @click="modalStep = 'select'" class="btn-link">Ganti</button>
           </div>
 
-          <!-- 1. Mau berapa SET -->
           <div class="form-row">
             <label>Jumlah Set Latihan:</label>
             <div class="counter-ctrl">
@@ -459,7 +546,6 @@ const features = [
             </div>
           </div>
 
-          <!-- 2. Repetisi per SET -->
           <div class="form-row">
             <label>Target Repetisi per Set:</label>
             <div class="counter-ctrl">
@@ -469,28 +555,17 @@ const features = [
             </div>
           </div>
 
-          <!-- 3. Beban kg -->
           <div class="form-row">
             <label>Beban Angkatan (kg):</label>
             <input type="number" step="0.5" min="0" v-model="targetWeight" placeholder="0 jika bodyweight" class="num-box" />
           </div>
 
-          <!-- 4. Waktu Istirahat antar Set -->
-          <div class="form-row">
-            <label>Waktu Istirahat Antar Set:</label>
-            <div class="counter-ctrl">
-              <button @click="restDuration > 15 ? restDuration -= 15 : null">-15s</button>
-              <span class="val">{{ restDuration }} detik</span>
-              <button @click="restDuration += 15">+15s</button>
-            </div>
-          </div>
-
-          <button @click="startLiveWorkout" class="btn-primary full">🔥 MULAI SESI LATIHAN (SET 1)</button>
+          <button @click="startLiveWorkout" class="btn-action-primary full">🔥 MULAI SESI LATIHAN (SET 1)</button>
         </div>
 
-        <!-- Step 3: Layar Latihan Aktif (Maju Set demi Set) -->
+        <!-- Step 3: Layar Latihan Aktif -->
         <div v-else-if="modalStep === 'live'" class="live-pane">
-          <!-- FASE 1: SEDANG LATIHAN (AKTIF ANGKAT BEBAN) -->
+          <!-- FASE 1: SEDANG LATIHAN -->
           <div v-if="!isResting" class="active-set-card">
             <div class="set-indicator">
               SET {{ currentSet }} DARI {{ totalSetsTarget }}
@@ -511,26 +586,47 @@ const features = [
             </button>
           </div>
 
-          <!-- FASE 2: FASE ISTIRAHAT ANTAR SET -->
+          <!-- FASE 2: JEDA ISTIRAHAT -->
           <div v-else class="resting-card">
-            <div class="rest-badge">⏱️ FASE ISTIRAHAT ANTAR SET</div>
-            <div class="rest-timer-large">{{ restCountdown }}s</div>
-            <p class="rest-hint">Tarik nafas dan minum. Bersiap untuk <b>Set {{ currentSet + 1 }} dari {{ totalSetsTarget }}</b>.</p>
+            <div class="rest-badge">⏱️ JEDA ISTIRAHAT • SET {{ currentSet }} SELESAI</div>
+            <div class="rest-timer-large" :class="{ finished: restCountdown <= 0 }">
+              {{ restCountdown }}s
+            </div>
 
-            <button @click="nextSet" class="btn-primary">
-              Lewati Istirahat & Lanjut Set {{ currentSet + 1 }} ➔
+            <p class="rest-hint">
+              {{ restCountdown > 0 ? 'Tarik napas & minum. Anda dapat mengatur durasi jeda istirahat di bawah:' : 'Waktu istirahat selesai! Bersiap untuk set berikutnya:' }}
+            </p>
+
+            <div class="rest-ctrl-panel">
+              <div class="rest-stepper">
+                <button type="button" @click="adjustRestTime(-15)" class="btn-adjust" title="Kurangi 15 detik">-15s</button>
+                <span class="adjust-val">{{ restCountdown }} detik</span>
+                <button type="button" @click="adjustRestTime(15)" class="btn-adjust" title="Tambah 15 detik">+15s</button>
+              </div>
+
+              <div class="rest-presets">
+                <button type="button" v-for="sec in [30, 60, 90, 120]" :key="sec" 
+                        @click="setRestTime(sec)" 
+                        :class="['btn-preset', { active: restCountdown === sec }]">
+                  {{ sec }}s
+                </button>
+              </div>
+            </div>
+
+            <button @click="nextSet" class="btn-next-set">
+              {{ restCountdown > 0 ? `Lewati Istirahat & Lanjut Set ${currentSet + 1} ➔` : `🔥 Mulai Set ${currentSet + 1} Sekarang ➔` }}
             </button>
           </div>
         </div>
 
-        <!-- Step 4: Ringkasan Selesai Seluruh Set -->
+        <!-- Step 4: Ringkasan Selesai -->
         <div v-else-if="modalStep === 'summary'" class="summary-pane">
           <div class="trophy">🏆</div>
           <h4>Semua Set Selesai! Luar Biasa!</h4>
           <p>Anda berhasil menyelesaikan <b>{{ totalSetsTarget }} Set</b> {{ selectedExercise?.name }} ({{ targetReps }} reps × {{ targetWeight }} kg).</p>
           <div class="summary-btns">
-            <button @click="modalStep = 'target'" class="btn-secondary">Ulangi</button>
-            <button @click="saveWorkoutResult" :disabled="isSaving" class="btn-primary">
+            <button @click="modalStep = 'target'" class="btn-action-secondary">Ulangi</button>
+            <button @click="saveWorkoutResult" :disabled="isSaving" class="btn-action-primary">
               <span v-if="!isSaving">Simpan {{ totalSetsTarget }} Set ke Logbook 🚀</span>
               <span v-else>Menyimpan...</span>
             </button>
@@ -539,98 +635,131 @@ const features = [
       </div>
     </div>
 
-    <!-- Modal Rest Timer Sederhana -->
-    <div v-if="isRestOpen" class="modal-overlay" @click.self="isRestOpen = false">
-      <div class="modal-window mini">
-        <div class="modal-top">
-          <h3>Rest Timer ⏱️</h3>
-          <button @click="isRestOpen = false" class="btn-close">✕</button>
-        </div>
-        <div class="timer-number">{{ restSec }}s</div>
-        <div class="timer-btns">
-          <button @click="startRest(60)" class="btn-secondary">60s</button>
-          <button @click="startRest(90)" class="btn-secondary">90s</button>
-          <button @click="startRest(120)" class="btn-secondary">120s</button>
-        </div>
+    <!-- Clean Minimalist Footer -->
+    <footer class="app-footer">
+      <div class="footer-inner">
+        <span>APEX<b>STRENGTH</b></span>
+        <span class="sep">•</span>
+        <span class="copy">Minimalist Workout & Progressive Overload Tracker</span>
       </div>
-    </div>
-
-    <!-- Footer -->
-    <footer class="footer">
-      <span>APEX<b>STRENGTH</b></span> &copy; 2026 Minimalist Gym Workout Tracker.
     </footer>
   </div>
 </template>
 
 <style scoped>
-.home { background: #07090e; color: #f1f5f9; min-height: 100vh; font-family: 'Plus Jakarta Sans', sans-serif; }
-.nav { max-width: 960px; margin: 0 auto; padding: 1rem 1.2rem; display: flex; justify-content: space-between; align-items: center; }
-.brand { display: flex; align-items: center; gap: 0.5rem; font-size: 1.15rem; font-weight: 800; color: #fff; }
-.brand b, .neon, .feat-tag { color: #ccff00; }
-.ic { width: 22px; height: 22px; color: #ccff00; }
-.nav-actions { display: flex; align-items: center; gap: 0.6rem; }
-.user-tag { font-size: 0.8rem; color: #94a3b8; background: #121722; padding: 0.3rem 0.7rem; border-radius: 999px; border: 1px solid rgba(255,255,255,0.08); }
-.user-tag b { color: #ccff00; }
-.btn-nav { background: transparent; border: 1px solid rgba(255,255,255,0.15); color: #cbd5e1; padding: 0.35rem 0.8rem; border-radius: 999px; font-size: 0.78rem; font-weight: 700; cursor: pointer; }
-.btn-admin-link { background: rgba(56,189,248,0.12); border: 1px solid rgba(56,189,248,0.3); color: #38bdf8; padding: 0.35rem 0.8rem; border-radius: 999px; font-size: 0.78rem; font-weight: 700; text-decoration: none; }
+/* BASE STYLING */
+.home-layout { background: #090d16; color: #f1f5f9; min-height: 100vh; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; display: flex; flex-direction: column; }
 
-/* Hero */
-.hero { max-width: 720px; margin: 0 auto; padding: 2.5rem 1.2rem 2rem; text-align: center; }
-.hero-title { font-size: clamp(1.6rem, 3.5vw, 2.3rem); font-weight: 800; line-height: 1.2; display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 0.8rem; }
-.sub { color: #94a3b8; font-size: 0.92rem; line-height: 1.5; margin-bottom: 1.5rem; }
-.cta-wrap { display: flex; justify-content: center; gap: 0.8rem; margin-bottom: 2rem; }
-.btn-primary { background: #ccff00; color: #07090e; font-weight: 800; border: none; padding: 0.7rem 1.4rem; border-radius: 10px; cursor: pointer; transition: .2s; }
-.btn-primary:hover { background: #d9ff33; }
-.btn-primary.full { width: 100%; margin-top: 1rem; padding: 0.85rem; font-size: 0.95rem; }
-.btn-secondary { background: #131926; border: 1px solid rgba(255,255,255,0.12); color: #cbd5e1; font-weight: 700; padding: 0.7rem 1.2rem; border-radius: 10px; cursor: pointer; }
-.btn-secondary:hover { background: #1c2538; color: #fff; }
+/* NAVBAR */
+.app-nav { background: #0d131f; border-bottom: 1px solid rgba(255,255,255,0.08); position: sticky; top: 0; z-index: 50; }
+.nav-container { max-width: 1120px; margin: 0 auto; padding: 0.85rem 1.5rem; display: flex; justify-content: space-between; align-items: center; }
+.brand { display: flex; align-items: center; gap: 0.6rem; }
+.brand-icon { width: 22px; height: 22px; color: #ccff00; }
+.brand-title { font-size: 1.15rem; font-weight: 800; letter-spacing: -0.02em; color: #fff; }
+.brand-title b { color: #ccff00; }
+.nav-actions { display: flex; align-items: center; gap: 0.75rem; }
+.nav-badge-admin { background: rgba(56,189,248,0.12); border: 1px solid rgba(56,189,248,0.25); color: #38bdf8; padding: 0.35rem 0.75rem; border-radius: 6px; font-size: 0.78rem; font-weight: 700; text-decoration: none; transition: .2s; }
+.nav-badge-admin:hover { background: rgba(56,189,248,0.2); }
+.user-pill { display: flex; align-items: center; gap: 0.5rem; background: #141b2b; border: 1px solid rgba(255,255,255,0.08); padding: 0.35rem 0.75rem; border-radius: 6px; font-size: 0.8rem; font-weight: 600; color: #cbd5e1; }
+.user-pill .dot { width: 7px; height: 7px; border-radius: 999px; background: #ccff00; }
+.btn-logout { background: transparent; border: 1px solid rgba(255,255,255,0.12); color: #94a3b8; padding: 0.35rem 0.75rem; border-radius: 6px; font-size: 0.78rem; font-weight: 700; cursor: pointer; transition: .2s; }
+.btn-logout:hover { color: #f87171; border-color: rgba(248,113,113,0.3); }
 
-/* Stats Banner */
-.stats-banner { display: flex; justify-content: space-around; align-items: center; background: #0d121c; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 0.85rem 1rem; margin-bottom: 2rem; }
-.stat-item small { font-size: 0.65rem; color: #94a3b8; font-weight: 800; letter-spacing: 0.5px; display: block; }
-.stat-item strong { font-size: 1.25rem; font-weight: 800; color: #fff; }
-.stat-item strong span { font-size: 0.75rem; color: #ccff00; }
-.stat-sep { width: 1px; height: 28px; background: rgba(255,255,255,0.08); }
-.date-input { background: #141b28; border: 1px solid rgba(204,255,0,0.3); color: #ccff00; border-radius: 6px; padding: 0.2rem 0.4rem; font-size: 0.75rem; font-weight: 700; }
+/* DASHBOARD & OVERVIEW */
+.dashboard-body { max-width: 1120px; margin: 0 auto; padding: 2rem 1.5rem; width: 100%; flex: 1; }
+.overview-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 1.6rem; }
+.sub-date { font-size: 0.8rem; font-weight: 700; color: #ccff00; letter-spacing: 0.5px; text-transform: uppercase; display: block; margin-bottom: 0.3rem; }
+.overview-info h2 { font-size: 1.6rem; font-weight: 800; letter-spacing: -0.02em; color: #fff; margin: 0; }
+.overview-actions { display: flex; gap: 0.6rem; }
 
-/* Log Card */
-.log-card { background: #0e1420; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 1.2rem; text-align: left; }
-.card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-.card-head h4 { margin: 0; font-size: 1.05rem; font-weight: 800; color: #fff; }
-.btn-mini { background: rgba(204,255,0,0.12); border: 1px solid rgba(204,255,0,0.3); color: #ccff00; padding: 0.25rem 0.6rem; border-radius: 6px; font-size: 0.74rem; font-weight: 800; cursor: pointer; }
-.state-box { text-align: center; padding: 1.8rem; color: #94a3b8; font-size: 0.85rem; }
-.log-list { display: flex; flex-direction: column; gap: 0.85rem; }
-.log-group { background: #131926; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 0.75rem; }
-.group-title { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.5rem; }
-.group-thumb { width: 36px; height: 36px; border-radius: 6px; object-fit: cover; }
-.group-title strong { font-size: 0.88rem; color: #fff; }
-.pill { font-size: 0.65rem; font-weight: 800; color: #38bdf8; background: rgba(56,189,248,0.1); padding: 0.15rem 0.4rem; border-radius: 4px; margin-left: 0.4rem; }
-.set-list { display: flex; flex-direction: column; gap: 0.35rem; }
-.set-row { display: flex; justify-content: space-between; align-items: center; background: #182133; padding: 0.45rem 0.65rem; border-radius: 6px; font-size: 0.8rem; }
-.set-num { color: #64748b; font-weight: 800; font-size: 0.7rem; }
-.set-time { font-size: 0.72rem; color: #38bdf8; background: rgba(56,189,248,0.1); padding: 0.1rem 0.35rem; border-radius: 4px; }
-.btn-del { background: transparent; border: none; color: #ef4444; font-weight: 800; cursor: pointer; padding: 0.1rem; }
+/* ACTION BUTTONS */
+.btn-action-primary { background: #ccff00; color: #090d16; font-size: 0.84rem; font-weight: 800; padding: 0.6rem 1.1rem; border-radius: 8px; border: none; cursor: pointer; transition: .2s; }
+.btn-action-primary:hover { background: #d9ff33; }
+.btn-action-primary.mini { padding: 0.5rem 1rem; font-size: 0.8rem; margin-top: 1rem; }
+.btn-action-primary.full { width: 100%; padding: 0.85rem; font-size: 0.95rem; margin-top: 1rem; }
+.btn-action-secondary { background: #131a29; border: 1px solid rgba(255,255,255,0.1); color: #cbd5e1; font-size: 0.82rem; font-weight: 700; padding: 0.6rem 1rem; border-radius: 8px; cursor: pointer; transition: .2s; }
+.btn-action-secondary:hover { background: #1a2336; color: #fff; }
 
-/* Fitur Utama - Bersih & Rapi */
-.feats-section { max-width: 960px; margin: 0 auto; padding: 3rem 1.2rem; }
-.feats-header { text-align: center; margin-bottom: 1.8rem; }
-.feats-header small { font-size: 0.7rem; font-weight: 800; letter-spacing: 1.5px; color: #ccff00; }
-.feats-header h2 { font-size: 1.5rem; font-weight: 800; color: #fff; margin-top: 0.2rem; }
-.feats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
-.feat-card { background: #0e1420; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 1.3rem; display: flex; flex-direction: column; }
-.feat-card h3 { font-size: 1.05rem; font-weight: 800; color: #fff; margin: 0.4rem 0 0.3rem; }
-.feat-card p { font-size: 0.82rem; color: #94a3b8; line-height: 1.5; margin-bottom: 0.9rem; flex-grow: 1; }
-.feat-badge { font-size: 0.72rem; font-weight: 700; color: #cbd5e1; background: rgba(255,255,255,0.06); padding: 0.25rem 0.5rem; border-radius: 5px; align-self: flex-start; }
+/* METRICS GRID */
+.metrics-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1.8rem; }
+.metric-card { background: #0f1523; border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 1.2rem; display: flex; flex-direction: column; }
+.metric-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+.metric-label { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.04em; color: #94a3b8; }
+.metric-tag { font-size: 0.65rem; font-weight: 800; color: #38bdf8; background: rgba(56,189,248,0.1); padding: 0.15rem 0.4rem; border-radius: 4px; }
+.metric-val { font-size: 1.75rem; font-weight: 800; letter-spacing: -0.02em; color: #fff; line-height: 1.2; }
+.metric-val .unit { font-size: 0.9rem; color: #ccff00; font-weight: 700; }
+.metric-sub { font-size: 0.75rem; color: #64748b; margin: 0.4rem 0 0; }
+.date-picker-wrap { margin: 0.2rem 0; }
+.input-date-native { background: #141b2a; border: 1px solid rgba(204,255,0,0.25); color: #ccff00; padding: 0.4rem 0.6rem; border-radius: 6px; font-weight: 700; font-size: 0.85rem; width: 100%; }
 
-/* Modal */
-.modal-overlay { position: fixed; inset: 0; background: rgba(4,7,12,0.85); backdrop-filter: blur(6px); display: flex; justify-content: center; align-items: center; z-index: 1000; padding: 1rem; }
-.modal-window { background: #0f1523; border: 1px solid rgba(255,255,255,0.12); border-radius: 14px; width: 100%; max-width: 520px; max-height: 90vh; overflow-y: auto; padding: 1.4rem; }
-.modal-window.mini { max-width: 320px; text-align: center; }
+/* WORKSPACE GRID */
+.workspace-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 1.2rem; align-items: start; }
+.section-card { background: #0f1523; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 1.4rem; }
+.section-card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.2rem; }
+.head-title { display: flex; align-items: center; gap: 0.6rem; }
+.head-title h3 { font-size: 1.1rem; font-weight: 800; color: #fff; margin: 0; }
+.counter-badge { font-size: 0.7rem; font-weight: 700; color: #94a3b8; background: #172033; padding: 0.2rem 0.5rem; border-radius: 4px; }
+.btn-inline-add { background: rgba(204,255,0,0.1); border: 1px solid rgba(204,255,0,0.25); color: #ccff00; font-size: 0.76rem; font-weight: 800; padding: 0.35rem 0.75rem; border-radius: 6px; cursor: pointer; transition: .2s; }
+.btn-inline-add:hover { background: rgba(204,255,0,0.2); }
+
+/* EMPTY & LOGS */
+.empty-state { text-align: center; padding: 3rem 1.5rem; color: #94a3b8; }
+.empty-icon { font-size: 2.5rem; margin-bottom: 0.6rem; }
+.empty-state h4 { font-size: 1rem; font-weight: 800; color: #f1f5f9; margin: 0 0 0.3rem; }
+.empty-state p { font-size: 0.82rem; color: #64748b; margin: 0; }
+
+.exercise-logs { display: flex; flex-direction: column; gap: 1rem; }
+.exercise-log-item { background: #131a29; border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 1rem; }
+.item-header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.8rem; }
+.item-thumb { width: 44px; height: 44px; border-radius: 8px; object-fit: cover; border: 1px solid rgba(255,255,255,0.1); }
+.item-meta { flex: 1; }
+.item-meta h4 { font-size: 0.95rem; font-weight: 800; color: #fff; margin: 0 0 0.2rem; }
+.badge-muscle { font-size: 0.68rem; font-weight: 700; color: #38bdf8; background: rgba(56,189,248,0.1); padding: 0.15rem 0.45rem; border-radius: 4px; }
+.item-summary-pill { font-size: 0.72rem; font-weight: 700; color: #94a3b8; }
+
+.sets-table { display: flex; flex-direction: column; gap: 0.4rem; }
+.set-row { display: flex; justify-content: space-between; align-items: center; background: #182236; padding: 0.5rem 0.8rem; border-radius: 6px; font-size: 0.82rem; }
+.set-badge { color: #94a3b8; font-size: 0.72rem; font-weight: 800; }
+.set-data { color: #e2e8f0; }
+.set-data b { color: #fff; }
+.set-timer { font-size: 0.72rem; color: #38bdf8; background: rgba(56,189,248,0.1); padding: 0.15rem 0.4rem; border-radius: 4px; }
+.btn-remove { background: transparent; border: none; color: #f87171; font-weight: 800; font-size: 0.85rem; cursor: pointer; padding: 0.2rem; }
+.btn-remove:hover { color: #ef4444; }
+
+/* SIDEBAR */
+.workspace-side { display: flex; flex-direction: column; gap: 1.2rem; }
+.side-card { background: #0f1523; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 1.2rem; }
+.side-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.9rem; }
+.side-head h4 { font-size: 0.92rem; font-weight: 800; color: #fff; margin: 0; }
+.sub-hint { font-size: 0.7rem; color: #64748b; }
+.quick-ex-list { display: flex; flex-direction: column; gap: 0.5rem; }
+.quick-ex-item { display: flex; align-items: center; gap: 0.65rem; background: #141b2b; border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; padding: 0.5rem 0.65rem; cursor: pointer; transition: .2s; }
+.quick-ex-item:hover { background: #1a2336; border-color: #ccff00; }
+.quick-thumb { width: 38px; height: 38px; border-radius: 6px; object-fit: cover; }
+.quick-meta { flex: 1; }
+.quick-meta strong { display: block; font-size: 0.82rem; color: #fff; }
+.quick-meta small { font-size: 0.7rem; color: #94a3b8; }
+.quick-arrow { color: #64748b; font-size: 0.75rem; }
+.quick-ex-item:hover .quick-arrow { color: #ccff00; }
+
+/* MINI REST WIDGET */
+.rest-widget { text-align: center; }
+.timer-tag { font-size: 0.65rem; font-weight: 800; color: #64748b; background: #172033; padding: 0.15rem 0.45rem; border-radius: 4px; }
+.timer-tag.running { color: #ccff00; background: rgba(204,255,0,0.12); }
+.widget-display { font-size: 3rem; font-weight: 900; color: #38bdf8; line-height: 1; margin: 1rem 0 1.2rem; font-variant-numeric: tabular-nums; }
+.widget-display span { font-size: 1.2rem; color: #64748b; }
+.widget-presets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.4rem; }
+.btn-timer-chip { background: #141b2a; border: 1px solid rgba(255,255,255,0.08); color: #cbd5e1; font-size: 0.76rem; font-weight: 700; padding: 0.45rem 0; border-radius: 6px; cursor: pointer; transition: .2s; }
+.btn-timer-chip:hover { background: rgba(56,189,248,0.15); border-color: #38bdf8; color: #38bdf8; }
+
+/* MODAL */
+.modal-overlay { position: fixed; inset: 0; background: rgba(4,7,14,0.85); backdrop-filter: blur(6px); display: flex; justify-content: center; align-items: center; z-index: 1000; padding: 1rem; }
+.modal-window { background: #0f1523; border: 1px solid rgba(255,255,255,0.12); border-radius: 14px; width: 100%; max-width: 520px; max-height: 90vh; overflow-y: auto; padding: 1.5rem; }
 .modal-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.2rem; }
-.modal-top h3 { margin: 0; font-size: 1.1rem; font-weight: 800; color: #fff; }
+.modal-top h3 { margin: 0; font-size: 1.15rem; font-weight: 800; color: #fff; }
 .btn-close { background: transparent; border: none; color: #94a3b8; font-size: 1.1rem; cursor: pointer; }
 
-/* Gallery */
+/* GALLERY & TARGET */
 .gallery-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.8rem; }
 .gallery-card { background: #141b29; border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; overflow: hidden; cursor: pointer; transition: .2s; }
 .gallery-card:hover { border-color: #ccff00; transform: translateY(-2px); }
@@ -639,7 +768,6 @@ const features = [
 .gallery-info strong { display: block; font-size: 0.84rem; color: #fff; }
 .gallery-info small { font-size: 0.7rem; color: #94a3b8; }
 
-/* Target Pane */
 .selected-header { display: flex; align-items: center; gap: 0.75rem; background: #141b29; padding: 0.75rem; border-radius: 10px; margin-bottom: 1.2rem; }
 .selected-thumb { width: 46px; height: 46px; border-radius: 6px; object-fit: cover; border: 1px solid #ccff00; }
 .btn-link { margin-left: auto; background: transparent; border: 1px solid rgba(255,255,255,0.15); color: #cbd5e1; font-size: 0.72rem; padding: 0.25rem 0.5rem; border-radius: 4px; cursor: pointer; }
@@ -650,44 +778,55 @@ const features = [
 .counter-ctrl .val { font-size: 0.88rem; font-weight: 800; color: #ccff00; min-width: 65px; text-align: center; }
 .num-box { background: #192133; border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 0.45rem 0.6rem; border-radius: 6px; font-weight: 700; width: 140px; text-align: right; }
 
-/* Live Pane (Set Progression) */
+/* LIVE & REST */
 .live-pane { text-align: center; padding: 0.5rem 0; }
 .active-set-card { background: #141b29; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 1.5rem 1.2rem; }
-.set-indicator { display: inline-block; font-size: 0.82rem; font-weight: 800; color: #07090e; background: #ccff00; padding: 0.3rem 0.8rem; border-radius: 999px; margin-bottom: 1.2rem; letter-spacing: 0.5px; }
+.set-indicator { display: inline-block; font-size: 0.8rem; font-weight: 800; color: #090d16; background: #ccff00; padding: 0.3rem 0.8rem; border-radius: 999px; margin-bottom: 1.2rem; letter-spacing: 0.5px; }
 .exercise-preview-row { display: flex; align-items: center; justify-content: center; gap: 0.8rem; margin-bottom: 1rem; }
 .preview-mini-thumb { width: 48px; height: 48px; border-radius: 8px; object-fit: cover; border: 1px solid #ccff00; }
 .exercise-preview-row h3 { margin: 0; font-size: 1.2rem; font-weight: 800; color: #fff; }
 .sub-target { font-size: 0.88rem; color: #38bdf8; font-weight: 700; display: block; margin-top: 0.2rem; }
 .set-instruction { font-size: 0.84rem; color: #94a3b8; line-height: 1.5; margin: 1rem auto 1.5rem; max-width: 380px; }
-.btn-complete-set { width: 100%; max-width: 320px; background: #ccff00; color: #07090e; font-size: 1.05rem; font-weight: 900; padding: 1rem; border-radius: 12px; border: none; cursor: pointer; transition: .2s; box-shadow: 0 4px 20px rgba(204,255,0,0.3); }
+.btn-complete-set { width: 100%; max-width: 320px; background: #ccff00; color: #090d16; font-size: 1.05rem; font-weight: 900; padding: 1rem; border-radius: 12px; border: none; cursor: pointer; transition: .2s; box-shadow: 0 4px 20px rgba(204,255,0,0.25); }
 .btn-complete-set:hover { background: #d9ff33; transform: scale(1.02); }
 
-/* Resting Card */
-.resting-card { background: #141b29; border: 1px solid rgba(56,189,248,0.25); border-radius: 12px; padding: 2rem 1.2rem; text-align: center; }
-.rest-badge { font-size: 0.75rem; font-weight: 800; color: #38bdf8; letter-spacing: 1px; margin-bottom: 0.5rem; }
-.rest-timer-large { font-size: 4rem; font-weight: 900; color: #38bdf8; line-height: 1; margin-bottom: 0.8rem; }
-.rest-hint { font-size: 0.88rem; color: #94a3b8; margin-bottom: 1.5rem; }
+.resting-card { background: #141b29; border: 1px solid rgba(56,189,248,0.25); border-radius: 12px; padding: 1.8rem 1.2rem; text-align: center; }
+.rest-badge { font-size: 0.75rem; font-weight: 800; color: #38bdf8; letter-spacing: 1px; margin-bottom: 0.4rem; }
+.rest-timer-large { font-size: 3.8rem; font-weight: 900; color: #38bdf8; line-height: 1; margin-bottom: 0.6rem; font-variant-numeric: tabular-nums; }
+.rest-timer-large.finished { color: #ccff00; }
+.rest-hint { font-size: 0.84rem; color: #94a3b8; margin-bottom: 1.2rem; }
 
-/* Summary */
+.rest-ctrl-panel { display: flex; flex-direction: column; align-items: center; gap: 0.8rem; margin-bottom: 1.5rem; }
+.rest-stepper { display: flex; align-items: center; gap: 0.6rem; background: #0f1523; padding: 0.35rem 0.6rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08); }
+.btn-adjust { background: #1a2233; border: 1px solid rgba(255,255,255,0.12); color: #fff; font-size: 0.78rem; font-weight: 800; padding: 0.35rem 0.7rem; border-radius: 6px; cursor: pointer; transition: .2s; }
+.btn-adjust:hover { background: #26334d; color: #ccff00; }
+.adjust-val { font-size: 0.9rem; font-weight: 800; color: #ccff00; min-width: 75px; }
+
+.rest-presets { display: flex; gap: 0.4rem; flex-wrap: wrap; justify-content: center; }
+.btn-preset { background: #1a2233; border: 1px solid rgba(255,255,255,0.1); color: #cbd5e1; font-size: 0.75rem; font-weight: 700; padding: 0.3rem 0.7rem; border-radius: 6px; cursor: pointer; transition: .2s; }
+.btn-preset:hover, .btn-preset.active { background: rgba(56,189,248,0.2); border-color: #38bdf8; color: #38bdf8; font-weight: 800; }
+
+.btn-next-set { width: 100%; max-width: 320px; background: #ccff00; color: #090d16; font-size: 0.95rem; font-weight: 800; padding: 0.85rem; border-radius: 10px; border: none; cursor: pointer; transition: .2s; }
+.btn-next-set:hover { background: #d9ff33; transform: scale(1.02); }
+
+/* SUMMARY, TOAST & FOOTER */
 .summary-pane { text-align: center; padding: 1rem 0; }
 .trophy { font-size: 3rem; margin-bottom: 0.4rem; }
 .summary-pane h4 { font-size: 1.3rem; margin: 0 0 0.3rem; color: #fff; }
 .summary-pane p { font-size: 0.88rem; color: #94a3b8; margin-bottom: 1.5rem; }
 .summary-btns { display: flex; justify-content: center; gap: 0.7rem; }
+.toast-bubble { position: fixed; bottom: 1.5rem; right: 1.5rem; background: #ccff00; color: #090d16; font-weight: 800; font-size: 0.82rem; padding: 0.65rem 1.2rem; border-radius: 8px; z-index: 2000; box-shadow: 0 8px 20px rgba(0,0,0,0.5); }
+.toast-bubble.error { background: #ef4444; color: #fff; }
 
-/* Mini Rest Timer */
-.timer-number { font-size: 2.8rem; font-weight: 900; color: #38bdf8; margin: 0.8rem 0; }
-.timer-btns { display: flex; justify-content: center; gap: 0.4rem; }
+.app-footer { text-align: center; padding: 1.8rem 1rem; font-size: 0.78rem; color: #64748b; border-top: 1px solid rgba(255,255,255,0.06); margin-top: auto; }
+.footer-inner { display: flex; justify-content: center; align-items: center; gap: 0.5rem; }
+.footer-inner b { color: #ccff00; }
+.footer-inner .sep { color: #334155; }
 
-/* Toast */
-.toast { position: fixed; bottom: 1.5rem; right: 1.5rem; background: #ccff00; color: #07090e; font-weight: 800; font-size: 0.82rem; padding: 0.65rem 1.2rem; border-radius: 8px; z-index: 2000; box-shadow: 0 8px 20px rgba(0,0,0,0.5); }
-.toast.error { background: #ef4444; color: #fff; }
-.footer { text-align: center; padding: 2rem 1rem; font-size: 0.78rem; color: #64748b; border-top: 1px solid rgba(255,255,255,0.06); }
-
-@media (max-width: 768px) {
-  .feats-grid { grid-template-columns: 1fr; }
-  .stats-banner { flex-direction: column; gap: 0.6rem; }
-  .stat-sep { display: none; }
-  .gallery-grid { grid-template-columns: 1fr; }
+/* RESPONSIVE */
+@media (max-width: 900px) {
+  .workspace-grid { grid-template-columns: 1fr; }
+  .metrics-grid { grid-template-columns: 1fr; }
+  .overview-header { flex-direction: column; align-items: flex-start; gap: 1rem; }
 }
 </style>
